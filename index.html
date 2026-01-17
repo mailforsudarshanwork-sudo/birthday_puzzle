@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="kn">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ಹುಟ್ಟುಹಬ್ಬದ ಸಂದೇಶ</title>
+
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #0f0f0f;
+    color: #ffffff;
+    font-family: system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  h2 {
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+
+  #timer {
+    margin-bottom: 14px;
+    opacity: 0.85;
+  }
+
+  /* Portrait puzzle: 5 × 8 */
+  #puzzle {
+    width: min(90vw, 320px);
+    aspect-ratio: 5 / 8;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    gap: 0;
+    background: #333;
+    touch-action: none;
+  }
+
+  .piece {
+    background-image: url("qr-puzzle.png");
+    background-repeat: no-repeat;
+    cursor: grab;
+    box-sizing: border-box;
+    border: 1px solid rgba(0,0,0,0.35);
+
+    filter:
+      brightness(0.9)
+      contrast(1.6)
+      saturate(0.95);
+  }
+
+  .piece.dragging {
+    opacity: 0.4;
+  }
+
+  #message {
+    display: none;
+    margin-top: 22px;
+    max-width: 320px;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  canvas {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+  }
+</style>
+</head>
+
+<body>
+
+<h2>ಚಿತ್ರವನ್ನು ಸರಿಯಾಗಿ ಜೋಡಿಸಿ</h2>
+<div id="timer">ಸಮಯ: 0 ಸೆಕೆಂಡು</div>
+
+<div id="puzzle"></div>
+
+<div id="message">
+  <p>
+    ನೀವು ಇದನ್ನು ಪೂರ್ಣಗೊಳಿಸಿದ್ದೀರಿ 🌱<br><br>
+    ಈಗ ಈ ಚಿತ್ರವನ್ನು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ,<br>
+    ನಿಮಗಾಗಿ ಇರುವ ಸಂದೇಶವನ್ನು ಕೇಳಿ.
+  </p>
+</div>
+
+<audio id="bgMusic" src="music.mp3" loop></audio>
+<audio id="successSound" src="success.mp3"></audio>
+<canvas id="confetti"></canvas>
+
+<script>
+const puzzle = document.getElementById("puzzle");
+const cols = 5;
+const rows = 8;
+
+const bgMusic = document.getElementById("bgMusic");
+const successSound = document.getElementById("successSound");
+
+/* ---------------- MUSIC FADE LOGIC ---------------- */
+let musicStarted = false;
+let fadeInterval = null;
+
+function fadeInMusic() {
+  if (musicStarted) return;
+  musicStarted = true;
+
+  bgMusic.volume = 0;
+  bgMusic.play();
+
+  fadeInterval = setInterval(() => {
+    if (bgMusic.volume < 0.4) {
+      bgMusic.volume = Math.min(bgMusic.volume + 0.04, 0.4);
+    } else {
+      clearInterval(fadeInterval);
+    }
+  }, 200);
+}
+
+function fadeOutMusic() {
+  clearInterval(fadeInterval);
+
+  fadeInterval = setInterval(() => {
+    if (bgMusic.volume > 0) {
+      bgMusic.volume = Math.max(bgMusic.volume - 0.04, 0);
+    } else {
+      bgMusic.pause();
+      clearInterval(fadeInterval);
+    }
+  }, 150);
+}
+
+/* Start music on first interaction */
+puzzle.addEventListener("mousedown", fadeInMusic, { once: true });
+puzzle.addEventListener("touchstart", fadeInMusic, { once: true });
+
+/* ---------------- TIMER ---------------- */
+let seconds = 0;
+const timerEl = document.getElementById("timer");
+const timerInterval = setInterval(() => {
+  seconds++;
+  timerEl.textContent = `Time: ${seconds} Seconds`;
+}, 1000);
+
+/* ---------------- PUZZLE LOGIC ---------------- */
+let tiles = Array.from({ length: cols * rows }, (_, i) => i);
+tiles.sort(() => Math.random() - 0.5);
+
+let dragged = null;
+
+for (let i = 0; i < cols * rows; i++) {
+  const cell = document.createElement("div");
+  cell.className = "piece";
+  cell.draggable = true;
+  cell.dataset.slot = i;
+  puzzle.appendChild(cell);
+}
+
+updateVisuals();
+
+puzzle.addEventListener("dragstart", e => {
+  if (!e.target.classList.contains("piece")) return;
+  dragged = e.target;
+  dragged.classList.add("dragging");
+});
+
+puzzle.addEventListener("dragend", () => {
+  if (dragged) dragged.classList.remove("dragging");
+  dragged = null;
+});
+
+puzzle.addEventListener("dragover", e => e.preventDefault());
+
+puzzle.addEventListener("drop", e => {
+  e.preventDefault();
+  if (!dragged || !e.target.classList.contains("piece")) return;
+  if (dragged === e.target) return;
+
+  const a = dragged.dataset.slot;
+  const b = e.target.dataset.slot;
+
+  const temp = tiles[a];
+  tiles[a] = tiles[b];
+  tiles[b] = temp;
+
+  updateVisuals();
+  checkSolved();
+});
+
+function updateVisuals() {
+  [...puzzle.children].forEach((cell, index) => {
+    const tileId = tiles[index];
+    const x = tileId % cols;
+    const y = Math.floor(tileId / cols);
+
+    cell.style.backgroundSize = `${cols * 100}% ${rows * 100}%`;
+    cell.style.backgroundPosition =
+      `${(x * 100) / (cols - 1)}% ${(y * 100) / (rows - 1)}%`;
+	/*cell.textContent = tileId;
+    cell.style.color = "red";
+    cell.style.fontSize = "12px";
+    cell.style.display = "flex";
+    cell.style.alignItems = "center";
+    cell.style.justifyContent = "center";
+    cell.style.fontWeight = "bold";*/
+
+  });
+}
+
+function checkSolved() {
+  const solved = tiles.every((tileId, index) => tileId === index);
+  if (solved) finish();
+}
+
+
+function finish() {
+  clearInterval(timerInterval);
+  fadeOutMusic();
+  successSound.play();
+  document.getElementById("message").style.display = "block";
+  confetti();
+}
+
+/* ---------------- CONFETTI ---------------- */
+function confetti() {
+  const canvas = document.getElementById("confetti");
+  const ctx = canvas.getContext("2d");
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
+
+  const particles = Array.from({ length: 140 }, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 4 + 2,
+    dy: Math.random() * 3 + 1
+  }));
+
+  let frames = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = "white";
+      ctx.fill();
+      p.y += p.dy;
+      if (p.y > canvas.height) p.y = 0;
+    });
+    if (++frames < 200) requestAnimationFrame(draw);
+  }
+  draw();
+}
+</script>
+
+</body>
+</html>
