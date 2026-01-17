@@ -6,70 +6,87 @@
 <title>ಹುಟ್ಟುಹಬ್ಬದ ಸಂದೇಶ</title>
 
 <style>
-  body {
-    margin: 0;
-    min-height: 100vh;
-    background: #0f0f0f;
-    color: #ffffff;
-    font-family: system-ui, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-  }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #0f0f0f;
+  color: #ffffff;
+  font-family: system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
 
-  h2 {
-    margin-bottom: 4px;
-    font-weight: 500;
-  }
+h2 {
+  margin-bottom: 4px;
+  font-weight: 500;
+}
 
-  #timer {
-    margin-bottom: 14px;
-    opacity: 0.85;
-  }
+#timer {
+  margin-bottom: 10px;
+  opacity: 0.85;
+}
 
-  /* Portrait puzzle: 5 × 8 */
-  #puzzle {
-    width: min(90vw, 320px);
-    aspect-ratio: 5 / 8;
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    grid-template-rows: repeat(8, 1fr);
-    gap: 0;
-    background: #333;
-    touch-action: none;
-  }
+/* Controls */
+#controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
 
-  .piece {
-    background-image: url("qr-puzzle.png");
-    background-repeat: no-repeat;
-    cursor: grab;
-    box-sizing: border-box;
-    border: 1px solid rgba(0,0,0,0.35);
+#controls button {
+  background: #222;
+  color: #fff;
+  border: 1px solid #444;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
 
-    filter:
-      brightness(0.9)
-      contrast(1.6)
-      saturate(0.95);
-  }
+#controls input[type="range"] {
+  width: 100px;
+}
 
-  .piece.dragging {
-    opacity: 0.4;
-  }
+/* Puzzle */
+#puzzle {
+  width: min(90vw, 320px);
+  aspect-ratio: 5 / 8;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  gap: 0;
+  background: #333;
+  touch-action: none;
+}
 
-  #message {
-    display: none;
-    margin-top: 22px;
-    max-width: 320px;
-    text-align: center;
-    line-height: 1.6;
-  }
+.piece {
+  background-image: url("qr-puzzle.png");
+  background-repeat: no-repeat;
+  cursor: grab;
+  box-sizing: border-box;
+  border: 1px solid rgba(0,0,0,0.35);
+  filter: brightness(0.9) contrast(1.6) saturate(0.95);
+}
 
-  canvas {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-  }
+.piece.dragging {
+  opacity: 0.4;
+}
+
+#message {
+  display: none;
+  margin-top: 22px;
+  max-width: 320px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
 </style>
 </head>
 
@@ -78,18 +95,23 @@
 <h2>ಚಿತ್ರವನ್ನು ಸರಿಯಾಗಿ ಜೋಡಿಸಿ</h2>
 <div id="timer">ಸಮಯ: 0 ಸೆಕೆಂಡು</div>
 
+<div id="controls">
+  <button id="muteBtn">🔊</button>
+  <input id="volumeSlider" type="range" min="0" max="100" value="40">
+</div>
+
 <div id="puzzle"></div>
 
 <div id="message">
   <p>
     ನೀವು ಇದನ್ನು ಪೂರ್ಣಗೊಳಿಸಿದ್ದೀರಿ 🌱<br><br>
-    ಈಗ ಈ ಚಿತ್ರವನ್ನು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ,<br>
-    ನಿಮಗಾಗಿ ಇರುವ ಸಂದೇಶವನ್ನು ಕೇಳಿ.
+    ಈಗ ಈ ಚಿತ್ರವನ್ನು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ.<br>
+    ನಿಮ್ಮಿಗಾಗಿ ಇರುವ ಸಂದೇಶವನ್ನು ಕೇಳಿ.
   </p>
 </div>
 
-<audio id="bgMusic" src="music.mp3" loop></audio>
-<audio id="successSound" src="success.mp3"></audio>
+<audio id="bgMusic" src="music.mp3" loop preload="auto" playsinline></audio>
+<audio id="successSound" src="success.mp3" preload="auto" playsinline></audio>
 <canvas id="confetti"></canvas>
 
 <script>
@@ -97,32 +119,36 @@ const puzzle = document.getElementById("puzzle");
 const cols = 5;
 const rows = 8;
 
+/* ---------------- AUDIO ---------------- */
 const bgMusic = document.getElementById("bgMusic");
 const successSound = document.getElementById("successSound");
+const muteBtn = document.getElementById("muteBtn");
+const volumeSlider = document.getElementById("volumeSlider");
 
-/* ---------------- MUSIC FADE LOGIC ---------------- */
 let musicStarted = false;
+let musicMuted = false;
 let fadeInterval = null;
+
+bgMusic.volume = 0.4;
 
 function fadeInMusic() {
   if (musicStarted) return;
   musicStarted = true;
 
   bgMusic.volume = 0;
-  bgMusic.play();
+  bgMusic.play().catch(() => {});
 
   fadeInterval = setInterval(() => {
-    if (bgMusic.volume < 0.4) {
-      bgMusic.volume = Math.min(bgMusic.volume + 0.04, 0.4);
+    if (bgMusic.volume < volumeSlider.value / 100) {
+      bgMusic.volume = Math.min(bgMusic.volume + 0.03, volumeSlider.value / 100);
     } else {
       clearInterval(fadeInterval);
     }
-  }, 200);
+  }, 150);
 }
 
 function fadeOutMusic() {
   clearInterval(fadeInterval);
-
   fadeInterval = setInterval(() => {
     if (bgMusic.volume > 0) {
       bgMusic.volume = Math.max(bgMusic.volume - 0.04, 0);
@@ -130,22 +156,30 @@ function fadeOutMusic() {
       bgMusic.pause();
       clearInterval(fadeInterval);
     }
-  }, 150);
+  }, 120);
 }
 
-/* Start music on first interaction */
-puzzle.addEventListener("mousedown", fadeInMusic, { once: true });
-puzzle.addEventListener("touchstart", fadeInMusic, { once: true });
+/* Mute */
+muteBtn.addEventListener("click", () => {
+  musicMuted = !musicMuted;
+  bgMusic.muted = musicMuted;
+  muteBtn.textContent = musicMuted ? "🔇" : "🔊";
+});
+
+/* Volume */
+volumeSlider.addEventListener("input", e => {
+  bgMusic.volume = e.target.value / 100;
+});
 
 /* ---------------- TIMER ---------------- */
 let seconds = 0;
 const timerEl = document.getElementById("timer");
 const timerInterval = setInterval(() => {
   seconds++;
-  timerEl.textContent = `Time: ${seconds} Seconds`;
+  timerEl.textContent = `ಸಮಯ: ${seconds} ಸೆಕೆಂಡು`;
 }, 1000);
 
-/* ---------------- PUZZLE LOGIC ---------------- */
+/* ---------------- PUZZLE ---------------- */
 let tiles = Array.from({ length: cols * rows }, (_, i) => i);
 tiles.sort(() => Math.random() - 0.5);
 
@@ -165,6 +199,9 @@ puzzle.addEventListener("dragstart", e => {
   if (!e.target.classList.contains("piece")) return;
   dragged = e.target;
   dragged.classList.add("dragging");
+
+  /* 🔥 FIRST TILE MOVE STARTS MUSIC */
+  fadeInMusic();
 });
 
 puzzle.addEventListener("dragend", () => {
@@ -182,9 +219,7 @@ puzzle.addEventListener("drop", e => {
   const a = dragged.dataset.slot;
   const b = e.target.dataset.slot;
 
-  const temp = tiles[a];
-  tiles[a] = tiles[b];
-  tiles[b] = temp;
+  [tiles[a], tiles[b]] = [tiles[b], tiles[a]];
 
   updateVisuals();
   checkSolved();
@@ -199,14 +234,6 @@ function updateVisuals() {
     cell.style.backgroundSize = `${cols * 100}% ${rows * 100}%`;
     cell.style.backgroundPosition =
       `${(x * 100) / (cols - 1)}% ${(y * 100) / (rows - 1)}%`;
-	/*cell.textContent = tileId;
-    cell.style.color = "red";
-    cell.style.fontSize = "12px";
-    cell.style.display = "flex";
-    cell.style.alignItems = "center";
-    cell.style.justifyContent = "center";
-    cell.style.fontWeight = "bold";*/
-
   });
 }
 
@@ -214,7 +241,6 @@ function checkSolved() {
   const solved = tiles.every((tileId, index) => tileId === index);
   if (solved) finish();
 }
-
 
 function finish() {
   clearInterval(timerInterval);
