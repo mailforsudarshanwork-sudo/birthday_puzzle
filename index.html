@@ -28,10 +28,22 @@ h2 {
   opacity: 0.85;
 }
 
+/* Audio gate */
+#audioGate {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  z-index: 10;
+  cursor: pointer;
+}
+
 /* Controls */
 #controls {
   display: flex;
-  align-items: center;
   gap: 10px;
   margin-bottom: 12px;
   font-size: 14px;
@@ -92,6 +104,8 @@ canvas {
 
 <body>
 
+<div id="audioGate">Tap once to begin 🌱</div>
+
 <h2>ಚಿತ್ರವನ್ನು ಸರಿಯಾಗಿ ಜೋಡಿಸಿ</h2>
 <div id="timer">ಸಮಯ: 0 ಸೆಕೆಂಡು</div>
 
@@ -105,8 +119,8 @@ canvas {
 <div id="message">
   <p>
     ನೀವು ಇದನ್ನು ಪೂರ್ಣಗೊಳಿಸಿದ್ದೀರಿ 🌱<br><br>
-    ಈಗ ಈ ಚಿತ್ರವನ್ನು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ.<br>
-    ನಿಮ್ಮಿಗಾಗಿ ಇರುವ ಸಂದೇಶವನ್ನು ಕೇಳಿ.
+    ಈಗ ಈ ಚಿತ್ರವನ್ನು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ...,<br>
+    ನಿಮಗಾಗಿ ಇರುವ ಸಂದೇಶವನ್ನು ಕೇಳಿ.
   </p>
 </div>
 
@@ -115,32 +129,23 @@ canvas {
 <canvas id="confetti"></canvas>
 
 <script>
-const puzzle = document.getElementById("puzzle");
-const cols = 5;
-const rows = 8;
-
 /* ---------------- AUDIO ---------------- */
 const bgMusic = document.getElementById("bgMusic");
 const successSound = document.getElementById("successSound");
 const muteBtn = document.getElementById("muteBtn");
 const volumeSlider = document.getElementById("volumeSlider");
+const audioGate = document.getElementById("audioGate");
 
-let musicStarted = false;
-let musicMuted = false;
 let fadeInterval = null;
-
-bgMusic.volume = 0.4;
+let musicMuted = false;
 
 function fadeInMusic() {
-  if (musicStarted) return;
-  musicStarted = true;
-
   bgMusic.volume = 0;
   bgMusic.play().catch(() => {});
-
   fadeInterval = setInterval(() => {
-    if (bgMusic.volume < volumeSlider.value / 100) {
-      bgMusic.volume = Math.min(bgMusic.volume + 0.03, volumeSlider.value / 100);
+    const target = volumeSlider.value / 100;
+    if (bgMusic.volume < target) {
+      bgMusic.volume = Math.min(bgMusic.volume + 0.03, target);
     } else {
       clearInterval(fadeInterval);
     }
@@ -159,14 +164,18 @@ function fadeOutMusic() {
   }, 120);
 }
 
-/* Mute */
+/* Explicit audio unlock */
+audioGate.addEventListener("click", () => {
+  fadeInMusic();
+  audioGate.style.display = "none";
+});
+
 muteBtn.addEventListener("click", () => {
   musicMuted = !musicMuted;
   bgMusic.muted = musicMuted;
   muteBtn.textContent = musicMuted ? "🔇" : "🔊";
 });
 
-/* Volume */
 volumeSlider.addEventListener("input", e => {
   bgMusic.volume = e.target.value / 100;
 });
@@ -176,10 +185,14 @@ let seconds = 0;
 const timerEl = document.getElementById("timer");
 const timerInterval = setInterval(() => {
   seconds++;
-  timerEl.textContent = `ಸಮಯ: ${seconds} ಸೆಕೆಂಡು`;
+  timerEl.textContent = `Time: ${seconds} Seconds`;
 }, 1000);
 
 /* ---------------- PUZZLE ---------------- */
+const puzzle = document.getElementById("puzzle");
+const cols = 5;
+const rows = 8;
+
 let tiles = Array.from({ length: cols * rows }, (_, i) => i);
 tiles.sort(() => Math.random() - 0.5);
 
@@ -199,9 +212,6 @@ puzzle.addEventListener("dragstart", e => {
   if (!e.target.classList.contains("piece")) return;
   dragged = e.target;
   dragged.classList.add("dragging");
-
-  /* 🔥 FIRST TILE MOVE STARTS MUSIC */
-  fadeInMusic();
 });
 
 puzzle.addEventListener("dragend", () => {
@@ -218,7 +228,6 @@ puzzle.addEventListener("drop", e => {
 
   const a = dragged.dataset.slot;
   const b = e.target.dataset.slot;
-
   [tiles[a], tiles[b]] = [tiles[b], tiles[a]];
 
   updateVisuals();
